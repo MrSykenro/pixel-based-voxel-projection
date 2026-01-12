@@ -1,0 +1,23 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+        "name": "windows-6750xt",
+        "displayName": "Windows - AMD RX 6750XT",
+        "generator": "Ninja",
+        "binaryDir": "${sourceDir}/build",
+        "environment": {
+            "ROCM_PATH": "C:/Program Files/AMD/ROCm/6.4"
+        },
+        "cacheVariables": {
+            "ROCM_PATH": "$env{ROCM_PATH}",
+            "CMAKE_PREFIX_PATH": "$env{ROCM_PATH}",
+            "CMAKE_CXX_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
+            "CMAKE_HIP_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
+            "CMAKE_HIP_ARCHITECTURES": "gfx1031",
+            "CMAKE_CXX_FLAGS": "-m64",
+            "CMAKE_HIP_FLAGS": "-m64"
+        }
+        }
+    ]
+}
