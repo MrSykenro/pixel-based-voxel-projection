@@ -1,4 +1,4 @@
-# Create a fake hip::host library for hip-cpu
+# Create a fake hip::host library for hip-cpu if hip isnt detected.
 if(NOT TARGET hip::host)
     find_package(Threads REQUIRED)
     find_package(TBB REQUIRED)
