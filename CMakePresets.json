@@ -2,22 +2,45 @@
     "version": 3,
     "configurePresets": [
         {
-        "name": "windows-6750xt",
-        "displayName": "Windows - AMD RX 6750XT",
-        "generator": "Ninja",
-        "binaryDir": "${sourceDir}/build",
-        "environment": {
-            "ROCM_PATH": "C:/Program Files/AMD/ROCm/6.4"
+            "name": "windows-6750xt",
+            "displayName": "Windows - AMD RX 6750XT",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "environment": {
+                "ROCM_PATH": "C:/Program Files/AMD/ROCm/6.4"
+            },
+            "cacheVariables": {
+                "ROCM_PATH": "$env{ROCM_PATH}",
+                "CMAKE_PREFIX_PATH": "$env{ROCM_PATH}",
+                "CMAKE_CXX_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
+                "CMAKE_HIP_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
+                "CMAKE_HIP_ARCHITECTURES": "gfx1031",
+                "CMAKE_CXX_FLAGS": "-m64",
+                "CMAKE_HIP_FLAGS": "-m64"
+            }
         },
-        "cacheVariables": {
-            "ROCM_PATH": "$env{ROCM_PATH}",
-            "CMAKE_PREFIX_PATH": "$env{ROCM_PATH}",
-            "CMAKE_CXX_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
-            "CMAKE_HIP_COMPILER": "$env{ROCM_PATH}/bin/clang++.exe",
-            "CMAKE_HIP_ARCHITECTURES": "gfx1031",
-            "CMAKE_CXX_FLAGS": "-m64",
-            "CMAKE_HIP_FLAGS": "-m64"
-        }
+        {
+            "name": "linux-intel-cpu",
+            "displayName": "Linux - Intel CPU (Local HIP-CPU)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": { 
+                "CMAKE_HIP_ABI_COMPILED": "ON",
+
+                "CMAKE_HIP_ARCHITECTURES": "OFF",
+                "CMAKE_HIP_INFORMATION_LOADED": "ON",
+                "CMAKE_HIP_COMPILER_ROCM_ROOT": "ON",
+                "CMAKE_HIP_COMPILER_ROCM_LIB": "ON",
+
+                "CMAKE_INCLUDE_FLAG_HIP": "-I",
+                "CMAKE_HIP_OUTPUT_EXTENSION": ".o",
+                "CMAKE_HIP_COMPILE_OBJECT": "<CMAKE_HIP_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -x c++ -c <SOURCE> -o <OBJECT>",
+                "CMAKE_HIP_ARCHIVE_CREATE": "<CMAKE_AR> qc <TARGET> <LINK_FLAGS> <OBJECTS>",
+                "CMAKE_HIP_ARCHIVE_FINISH": "<CMAKE_RANLIB> <TARGET>",
+                "CMAKE_HIP_LINK_EXECUTABLE": "<CMAKE_HIP_COMPILER> <FLAGS> <CMAKE_HIP_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>",
+                
+                "CMAKE_PROJECT_INCLUDE": "${sourceDir}/cmake/hip-cpu-wrapper.cmake"
+            }
         }
     ]
 }
