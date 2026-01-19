@@ -1,8 +1,8 @@
-#include "math_tools.hpp"
+#include "voxel_projection.hpp"
+#include "formats.hpp"
 #include <hip/hip_runtime.h>
 #include <hip/hip_vector_types.h>
 #include <iostream>
+#include <cfloat>
 #include <math.h>
-
-#define M_PI 3.14159265358979323846
 

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include "test.hpp"
+#include "voxel_projection.hpp"
 
 int main() {
     int N = 100;
@@ -8,7 +9,7 @@ int main() {
 
     // Call the wrapper
     run_vector_add(a, b, c, N);
-
+    
     std::cout << "Result of first element: " << c[0] << std::endl;
     return 0;
 }
