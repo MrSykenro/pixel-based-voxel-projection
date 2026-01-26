@@ -9,6 +9,10 @@ int main() {
 
     // Call the wrapper
     run_vector_add(a, b, c, N);
+
+    CameraData camera_data[1] = {{1, 60.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f}};
+
+    VoxelP::setCameraConstants(camera_data, 1);
     
     std::cout << "Result of first element: " << c[0] << std::endl;
     return 0;

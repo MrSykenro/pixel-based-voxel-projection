@@ -1,13 +1,10 @@
-struct Vector3f
-{
-    float vector[3];
-};
-
+// 3x3 Matrix of floats stored as an array of 9 floats
 struct Matrix3x3f
 {
     float matrix[9];
 };
 
+// Camera information for transferring into device
 struct CameraData
 {
     int camera_index;

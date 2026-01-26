@@ -2,7 +2,10 @@
 
 # Create libraries
 add_library(test_lib STATIC test.hip)
-add_library(voxel_projection STATIC voxel_projection.hip)
+add_library(voxel_projection STATIC 
+    voxel_projection.hip 
+    constant_data.hip
+)
 
 target_include_directories(test_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(voxel_projection PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
