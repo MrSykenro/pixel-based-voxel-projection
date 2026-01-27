@@ -3,7 +3,6 @@
 # Create libraries
 add_library(test_lib STATIC test.hip)
 add_library(voxel_projection STATIC 
-    voxel_projection.hip 
     constant_data.hip
 )
 
