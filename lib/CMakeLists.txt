@@ -3,7 +3,7 @@
 # Create libraries
 add_library(test_lib STATIC test.hip)
 add_library(voxel_projection STATIC 
-    constant_data.hip
+    ray_generation.hip
 )
 
 target_include_directories(test_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
