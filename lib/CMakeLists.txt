@@ -4,6 +4,7 @@
 add_library(test_lib STATIC test.hip)
 add_library(voxel_projection STATIC 
     ray_generation.hip
+    motion_extraction.hip
 )
 
 target_include_directories(test_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

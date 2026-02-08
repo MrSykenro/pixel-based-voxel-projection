@@ -21,5 +21,6 @@ struct RayBuffer
     float* dir_z;
     float* intensity;
     int* camera_id;
+    int* ray_count; // THIS IS A SINGLE INTEGER. EDIT USING ATOMIC FUNCTIONS ONLY.
 };
 
