@@ -22,5 +22,24 @@ struct RayBuffer
     float* intensity;
     int* camera_id;
     int* ray_count; // THIS IS A SINGLE INTEGER. EDIT USING ATOMIC FUNCTIONS ONLY.
+    size_t max_ray_count;
 };
 
+
+struct VoxelGrid
+{
+    int voxel_length;
+    int chunk_size;
+
+    float grid_position_x;
+    float grid_position_y;
+    float grid_position_z;
+
+    int chunk_grid_x; 
+    int chunk_grid_y; 
+    int chunk_grid_z; 
+
+    int* active_chunks;
+    int* chunk_mask;
+    float* voxel_array;
+};

@@ -69,6 +69,7 @@ __device__ __forceinline__ float3 createRay(float x, float y, float z, const Mat
 /**
  * Generates all the rays using camera constants.
  * Writes all the data into corresponding arrays in the given RayBuffer.
+ * Any ray after the RayBuffer fills is dismissed
  * @param difference_image Float array of the difference between 2 sets of frames.
  * @param ray_buffer Buffer to store the rays that are calculated.
  * @param threshold The minimum intensity to generate the ray.
@@ -86,15 +87,18 @@ __global__ void calculateRayKernel(
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int camera_id = blockIdx.z;
     
-    if (x >= image_width || y >= image_height) return;
+    if(x >= image_width || y >= image_height) return;
 
-    // Read the intensity of the current pixel.
+    // Get the index of the current pixel.
     // (iz * height * width) + (iy * width) + ix    
     // =>   ([iz * height] + iy) * width + ix 
     size_t pixel_index = (size_t)(camera_id * image_height + y) * (size_t)image_width + x;
-    float intensity = difference_image[pixel_index];
-    
+
+    // Prevent ray overflow
+    if(pixel_index >= ray_buffer.max_ray_count) return;
+
     // Prevent unnecessary ray calculation.
+    float intensity = difference_image[pixel_index];
     if(intensity < threshold) return;
     
 
@@ -106,7 +110,7 @@ __global__ void calculateRayKernel(
         c_camera_matrices[camera_id]
     );
 
-    // Incrrease the calculated ray count and read the index of the current ray.
+    // Increase the calculated ray count and read the index of the current ray.
     int ray_index = atomicAdd(ray_buffer.ray_count, 1);
 
     // Write the current ray into it's corresponding spot. 
@@ -119,6 +123,44 @@ __global__ void calculateRayKernel(
 
 
 extern "C"{namespace VoxelP{
+    RayBuffer initRayBuffer(size_t max_ray_count){
+        float *d_dir_x, *d_dir_y, *d_dir_z, *d_intensity;
+        int *d_camera_id, *d_ray_count;
+
+        // Allocate memory on the gpu.
+        HIP_CHECK(hipMalloc(&d_dir_x, max_ray_count * sizeof(float)));
+        HIP_CHECK(hipMalloc(&d_dir_y, max_ray_count * sizeof(float)));
+        HIP_CHECK(hipMalloc(&d_dir_z, max_ray_count * sizeof(float)));
+        HIP_CHECK(hipMalloc(&d_intensity, max_ray_count * sizeof(float)));
+        HIP_CHECK(hipMalloc(&d_camera_id, max_ray_count * sizeof(int)));
+        HIP_CHECK(hipMalloc(&d_ray_count, sizeof(int)));
+
+        HIP_CHECK(hipMemset(&d_ray_count, 0, sizeof(int)));
+
+        return RayBuffer{
+            d_dir_x, d_dir_y, d_dir_z, d_intensity, d_camera_id , d_ray_count, max_ray_count
+        };
+    }
+    
+    void freeRayBuffer(RayBuffer &ray_buffer){
+        // Free memory on the gpu.
+        HIP_CHECK(hipFree(ray_buffer.dir_x));
+        HIP_CHECK(hipFree(ray_buffer.dir_y));
+        HIP_CHECK(hipFree(ray_buffer.dir_z));
+        HIP_CHECK(hipFree(ray_buffer.intensity));
+        HIP_CHECK(hipFree(ray_buffer.camera_id));
+        HIP_CHECK(hipFree(ray_buffer.ray_count));
+
+        ray_buffer.dir_x = nullptr;
+        ray_buffer.dir_y = nullptr;
+        ray_buffer.dir_z = nullptr;
+        ray_buffer.intensity = nullptr;
+        ray_buffer.camera_id = nullptr;
+        ray_buffer.ray_count = nullptr;
+
+        ray_buffer.max_ray_count = 0;
+    }
+
     void setCameraConstants(const CameraData* camera_data_array, int camera_count){
         if(camera_count > 32){
             std::cerr << "[Memory Limit Error]: camera_count(" << camera_count 

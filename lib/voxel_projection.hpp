@@ -5,7 +5,32 @@
 #include <iostream>
 #include <math.h>
 
+#define HIP_CHECK(command) { \
+    hipError_t status = command; \
+    if (status != hipSuccess) { \
+        std::cerr << "Error: " << hipGetErrorString(status) << std::endl; \
+        exit(1); \
+    } \
+}
+
+
 extern "C"{namespace VoxelP{ 
+    /**
+     * Create a RayBuffer struct with all the arrays allocated in the gpu.
+     * @param max_ray_count Maximum amount of rays that can be stored.
+     * 
+     * TODO: Consider using C++ classes instead.
+     */
+    RayBuffer initRayBuffer(size_t max_ray_count);
+    
+    /**
+     * Free the specified RayBuffer.
+     * @param ray_buffer Specify the RayBuffer to free.
+     * 
+     * TODO: Consider using C++ classes instead.
+     */
+    void freeRayBuffer(RayBuffer &ray_buffer);
+
     /**
      * Calculates the motion differences between stacked frames by subtracting them.
      * Input frames must be stored as a single array contaning all the images from different cameras.
