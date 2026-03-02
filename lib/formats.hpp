@@ -30,6 +30,7 @@ struct VoxelGrid
 {
     int voxel_length;
     int chunk_size;
+    int chunk_size_ln2;
 
     float grid_position_x;
     float grid_position_y;

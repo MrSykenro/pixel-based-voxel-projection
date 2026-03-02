@@ -1,9 +1,10 @@
 #include "voxel_projection.hpp"
 
 #define EPSILON 1e-12f
+extern __constant__ float3 c_camera_positions[32];
 
 /**
- * Calculates the length of the ray when it enters and exits the grid,
+ * Calculates the length of the ray when it enters and its the grid,
  * to be used by the DDA algorithm
  * @param ray_origin Starting position of the ray in world coordinates
  * @param ray_direction Direction of the ray.
@@ -63,8 +64,8 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
 
     if(ray_index >= *(ray_buffer.ray_count)) return;
 
-    // Create and calculate the values that will be used
     float chunk_length = voxel_grid.chunk_size * voxel_grid.voxel_length;
+    // Create and calculate the values that will be used
     int camera_id = ray_buffer.camera_id[ray_index];
     float3 ray_origin = c_camera_positions[camera_id];
     float3 ray_direction = make_float3(
@@ -87,7 +88,8 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
     float3 grid_max = make_float3(
         voxel_grid.grid_position_x + voxel_grid.chunk_grid_x * chunk_length, 
         voxel_grid.grid_position_y + voxel_grid.chunk_grid_y * chunk_length, 
-        voxel_grid.grid_position_z + voxel_grid.chunk_grid_z * chunk_length);
+        voxel_grid.grid_position_z + voxel_grid.chunk_grid_z * chunk_length
+    );
 
     // Calculate length of the ray when it enters and exits the grid.
     float ray_min, ray_max;
@@ -109,10 +111,10 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
     );
 
     // Check if the ray is outside.
-    if( chunk_index.x<0 || chunk_index.x >= voxel_grid.chunk_grid_x || 
-        chunk_index.y<0 || chunk_index.y >= voxel_grid.chunk_grid_y ||
-        chunk_index.z<0 || chunk_index.z >= voxel_grid.chunk_grid_z)
-    return;
+    if( chunk_index.x < 0 || chunk_index.x >= voxel_grid.chunk_grid_x || 
+        chunk_index.y < 0 || chunk_index.y >= voxel_grid.chunk_grid_y ||
+        chunk_index.z < 0 || chunk_index.z >= voxel_grid.chunk_grid_z
+    ) return;
 
     int3 step_direction = make_int3(
         (ray_direction.x >= 0) ? 1 : -1,
@@ -173,3 +175,153 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
         ) break;
     }
 }
+
+__global__ void traceRays(RayBuffer ray_buffer, VoxelGrid voxel_grid){
+    int ray_index = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if(ray_index >= *(ray_buffer.ray_count)) return;
+
+    int3 grid_size = make_int3(
+        voxel_grid.chunk_grid_x * voxel_grid.chunk_size,
+        voxel_grid.chunk_grid_y * voxel_grid.chunk_size,
+        voxel_grid.chunk_grid_z * voxel_grid.chunk_size
+    );
+    // Create and calculate the values that will be used
+    const int bit_mask = (1 << voxel_grid.chunk_size_ln2) - 1; 
+    int camera_id = ray_buffer.camera_id[ray_index];
+    float3 ray_origin = c_camera_positions[camera_id];
+    float3 ray_direction = make_float3(
+        ray_buffer.dir_x[ray_index],
+        ray_buffer.dir_y[ray_index],
+        ray_buffer.dir_z[ray_index]
+    );
+    float3 inverse_direction = make_float3(
+        1.f / ray_direction.x,
+        1.f / ray_direction.y,
+        1.f / ray_direction.z
+    );
+
+    // Calculate the start and end coordinates of the grid
+    float3 grid_min = make_float3(
+        voxel_grid.grid_position_x, 
+        voxel_grid.grid_position_y, 
+        voxel_grid.grid_position_z
+    );
+    float3 grid_max = make_float3(
+        voxel_grid.grid_position_x + grid_size.x * voxel_grid.voxel_length, 
+        voxel_grid.grid_position_y + grid_size.y * voxel_grid.voxel_length, 
+        voxel_grid.grid_position_z + grid_size.z * voxel_grid.voxel_length
+    );
+
+    // Calculate length of the ray when it enters and exits the grid.
+    float ray_min, ray_max;
+    bool is_collision = calculateIntersectionPoints(
+        ray_origin, ray_direction, inverse_direction, 
+        grid_min, grid_max, ray_min, ray_max
+    );
+    if(!is_collision) return;
+
+    // Calculate cooridnates of the point where the ray first enters the grid.
+    float3 start_world = ray_origin + ray_min * ray_direction;
+
+    // Calculate the index of the first voxel.
+    // TODO: Check for edge case errors with grid_max
+    int3 voxel_index = make_int3(
+        static_cast<int>((start_world.x - grid_min.x) / voxel_grid.voxel_length),
+        static_cast<int>((start_world.y - grid_min.y) / voxel_grid.voxel_length),
+        static_cast<int>((start_world.z - grid_min.z) / voxel_grid.voxel_length)
+    );
+
+    // Check if the ray is outside.
+    if( voxel_index.x < 0 || voxel_index.x >= grid_size.x || 
+        voxel_index.y < 0 || voxel_index.y >= grid_size.y ||
+        voxel_index.z < 0 || voxel_index.z >= grid_size.z
+    ) return;
+
+    int3 step_direction = make_int3(
+        (ray_direction.x >= 0) ? 1 : -1,
+        (ray_direction.y >= 0) ? 1 : -1,
+        (ray_direction.z >= 0) ? 1 : -1
+    );
+
+    // Calculate the begining world coordinates of the indexed voxel.
+    float3 entrance_plane = make_float3(
+        static_cast<float>(voxel_index.x + max(0, step_direction.x)) * voxel_grid.voxel_length + grid_min.x,
+        static_cast<float>(voxel_index.y + max(0, step_direction.y)) * voxel_grid.voxel_length + grid_min.y,
+        static_cast<float>(voxel_index.z + max(0, step_direction.z)) * voxel_grid.voxel_length + grid_min.z
+    );
+
+    // Length of the ray; from origin to nearest voxel boundary plane.  
+    float3 ray_side = (entrance_plane - ray_origin) * inverse_direction;
+    // Length of the ray that needs to be traveled per iteration.  
+    float3 ray_delta = make_float3(
+        voxel_grid.voxel_length * fabsf(inverse_direction.x),
+        voxel_grid.voxel_length * fabsf(inverse_direction.y),
+        voxel_grid.voxel_length * fabsf(inverse_direction.z)
+    );
+    
+    float intensity = ray_buffer.intensity[ray_index];
+    float ray_current = ray_min;
+
+    while (ray_current <= ray_max) {
+        // Calculate the position of the chunk
+        int3 chunk_position = make_int3(
+            voxel_index.x >> voxel_grid.chunk_size_ln2,
+            voxel_index.y >> voxel_grid.chunk_size_ln2,
+            voxel_index.z >> voxel_grid.chunk_size_ln2
+        );
+        // Calculate linear index of the chunk
+        size_t chunk_index = 
+            (size_t)voxel_grid.chunk_grid_x * (size_t)voxel_grid.chunk_grid_y * (size_t)chunk_position.z +
+            (size_t)voxel_grid.chunk_grid_x * (size_t)chunk_position.y +
+            (size_t)chunk_position.x;
+        
+        // Check if the chunk is active
+        if (voxel_grid.chunk_mask[chunk_index] != 0) {
+            // Get the starting position of the chunk
+            int chunk_begin = voxel_grid.chunk_mask[chunk_index];
+
+            // Calculate local voxel position within the chunk
+            int3 local_voxel_position = make_int3(
+                voxel_index.x & bit_mask,
+                voxel_index.y & bit_mask,
+                voxel_index.z & bit_mask
+            );
+
+            // Calculate the index of the voxel 
+            size_t local_index = 
+                (local_voxel_position.z << (voxel_grid.chunk_size_ln2 * 2)) + 
+                (local_voxel_position.y << voxel_grid.chunk_size_ln2) + 
+                local_voxel_position.x
+            ;
+            size_t global_index = (size_t)chunk_begin * (1 << (voxel_grid.chunk_size_ln2 * 3)) + local_index;
+
+            // Accumulate intensity
+            atomicAdd(&voxel_grid.voxel_array[global_index], intensity);
+        }
+
+        // Iteration Logic
+        if (ray_side.x < ray_side.y && ray_side.x < ray_side.z) {
+            voxel_index.x += step_direction.x;
+            ray_current = ray_side.x;
+            ray_side.x += ray_delta.x;
+        } else if (ray_side.y < ray_side.z) {
+            voxel_index.y += step_direction.y;
+            ray_current = ray_side.y;
+            ray_side.y += ray_delta.y;
+        } else {
+            voxel_index.z += step_direction.z;
+            ray_current = ray_side.z;
+            ray_side.z += ray_delta.z;
+        }
+
+        // Owerflow prevention
+        if (voxel_index.x < 0 || voxel_index.x >= grid_size.x ||
+            voxel_index.y < 0 || voxel_index.y >= grid_size.y ||
+            voxel_index.z < 0 || voxel_index.z >= grid_size.z
+        ) break;
+    }
+}
+
+extern "C"{namespace VoxelP{
+}}
