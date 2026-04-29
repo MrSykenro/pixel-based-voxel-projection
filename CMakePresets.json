@@ -7,6 +7,7 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-D__HIP_PLATFORM_AMD__",
                 "CMAKE_CXX_COMPILER": "C:/Program Files/AMD/ROCm/6.4/bin/clang++.exe",
                 "CMAKE_HIP_ARCHITECTURES": "gfx1031"
             }

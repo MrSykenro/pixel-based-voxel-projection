@@ -1,4 +1,4 @@
-#include "voxel_projection.hpp"
+#include <voxel_projection.hpp>
 
 __constant__ Matrix3x3f c_camera_matrices[32];
 __constant__ float3 c_camera_positions[32];
@@ -135,7 +135,7 @@ extern "C"{namespace VoxelP{
         HIP_CHECK(hipMalloc(&d_camera_id, max_ray_count * sizeof(int)));
         HIP_CHECK(hipMalloc(&d_ray_count, sizeof(int)));
 
-        HIP_CHECK(hipMemset(&d_ray_count, 0, sizeof(int)));
+        HIP_CHECK(hipMemset(d_ray_count, 0, sizeof(int)));
 
         return RayBuffer{
             d_dir_x, d_dir_y, d_dir_z, d_intensity, d_camera_id , d_ray_count, max_ray_count

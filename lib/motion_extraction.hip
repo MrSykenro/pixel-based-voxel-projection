@@ -1,4 +1,4 @@
-#include "voxel_projection.hpp"
+#include <voxel_projection.hpp>
 
 // Conversion constants for grayscale (Rec.601)
 #define GS_R 0.299f

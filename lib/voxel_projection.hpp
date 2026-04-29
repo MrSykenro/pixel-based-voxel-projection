@@ -4,6 +4,7 @@
 #include "formats.hpp"
 #include <iostream>
 #include <math.h>
+#include <hip/hip_runtime.h>
 
 #define HIP_CHECK(command) { \
     hipError_t status = command; \
@@ -68,4 +69,9 @@ extern "C"{namespace VoxelP{
         float* difference_image, RayBuffer ray_buffer, float threshold, 
         int image_width, int image_height, int camera_count
     );
+
+    //--------------------------------------------------------------------------
+    // Requires Documentation
+    //--------------------------------------------------------------------------
+    void projectToGrid(RayBuffer ray_buffer, VoxelGrid &voxel_grid);
 }}

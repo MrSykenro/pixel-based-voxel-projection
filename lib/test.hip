@@ -1,4 +1,4 @@
-#include "test.hpp"
+#include <test.hpp>
 #include <hip/hip_runtime.h>
 #include <iostream>
 
