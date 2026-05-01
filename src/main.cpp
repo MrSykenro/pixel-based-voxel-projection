@@ -5,6 +5,46 @@
 #include "test.hpp"
 #include "voxel_projection.hpp"
 
+#include <fstream>
+#include <sstream>
+
+float cube_vertices[] = {
+    // Back face
+    -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,
+     0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f, -0.5f, -0.5f,
+    // Front face
+    -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,
+     0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f, -0.5f,  0.5f,
+    // Left face
+    -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f, -0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f,
+    // Right face
+     0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,
+     0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,
+    // Bottom face
+    -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,
+     0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f, -0.5f,
+    // Top face
+    -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,
+     0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f,
+};
+
+unsigned int cubeVAO, cubeVBO, instanceVBO;
+
+std::string loadShaderSource(const char* filePath) {
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open shader file: " << filePath << std::endl;
+        return "";
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+
+
+
 
 int main() {
     // -------------------------------------------------------------------------
@@ -47,12 +87,13 @@ int main() {
     // GUI
     // -------------------------------------------------------------------------
     
+    // Initialize GLFW
+    if (!glfwInit()) return -1;
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    /* Initialize the library */
-    if (!glfwInit())
-        return -1;
-
-    /* Create a windowed mode window and its OpenGL context */
+	// Create window
     GLFWwindow* window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
     if (!window)
     {
@@ -60,102 +101,133 @@ int main() {
         return -1;
     }
 
-    /* Make the window's context current */
     glfwMakeContextCurrent(window);
 
+	// Load GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
     std::cout << "Failed to initialize GLAD" << std::endl;
     return -1;
     }
 
 
-    const char* vertexShaderSrc =
-		"#version 330 core\n"
-		"layout (location = 0) in vec3 aPos;\n"
-		"void main() {\n"
-		"    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0f);\n" 
-		"}\0";
 
-	const char* fragmentShaderSrc =
-		"#version 330 core\n"
-		"out vec4 fragColor;\n"
-		"void main() {\n"
-		"    fragColor = vec4(0.847f, 0.247f, 0.192f, 1.0f);\n"
-		"}\0";
 
+
+	float manual_cubes[] = {
+    	0.0f,  0.0f, -0.5f, 100.0f, // Cube 1: Center, slightly away
+    	1.0f,  1.0f, -0.7f,  50.0f, // Cube 2: Top Right, further away
+   		-1.0f, -0.5f, -0.4f,  10.0f  // Cube 3: Bottom Left, very close
+	};
+	int test_cube_count = 3;
+
+	float identityMatrix[16] = {
+	    1,0,0,0,
+	    0,1,0,0,
+	    0,0,1,0,
+	    0,0,0,1
+	};
+
+	// 1. Load the source code from files
+	std::string vertexCode = loadShaderSource("../shaders/cubes_instanced.vert");
+	std::string fragmentCode = loadShaderSource("../shaders/cubes_instanced.frag");
+
+	const char* vShaderSource = vertexCode.c_str();
+	const char* fShaderSource = fragmentCode.c_str();
+
+	// 2. Compile Vertex Shader
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSrc, 0);
+	glShaderSource(vertexShader, 1, &vShaderSource, NULL);
 	glCompileShader(vertexShader);
+
+	// Check for compile errors
 	int success;
 	char infoLog[512];
 	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-	if (!success)
-	{
-		glGetShaderInfoLog(vertexShader, 512, 0, infoLog);
-		std::cout << "Failed to compile the vertex shader! ERR: " << infoLog << std::endl;
+	if (!success) {
+	    glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+	    std::cout << "Vertex Compilation Failed:\n" << infoLog << std::endl;
 	}
 
+	// 3. Compile Fragment Shader
 	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSrc, 0);
+	glShaderSource(fragmentShader, 1, &fShaderSource, NULL);
 	glCompileShader(fragmentShader);
+
 	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-	if (!success)
-	{
-		glGetShaderInfoLog(fragmentShader, 512, 0, infoLog);
-		std::cout << "Failed to compile the fragment shader! ERR: " << infoLog << std::endl;
+	if (!success) {
+	    glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+	    std::cout << "Fragment Compilation Failed:\n" << infoLog << std::endl;
 	}
 
+	// 4. Link Program
 	unsigned int shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
+
+	// Check for linking errors
 	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-	if (!success)
-	{
-		glGetProgramInfoLog(shaderProgram, 512, 0, infoLog);
-		std::cout << "Failed to link the shader program! ERR: " << infoLog << std::endl;
+	if (!success) {
+	    glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+	    std::cout << "Shader Linking Failed:\n" << infoLog << std::endl;
 	}
 
+	// 5. Cleanup
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
 
-	float vertices[] = {
-		-1.0f, -1.0f, 0.0f,
-		-1.0f,  1.0f, 0.0f,
-		1.0f, -1.0f, 0.0f,
-	};
+	unsigned int cubeVAO, cubeVBO, instanceVBO;
+	glGenVertexArrays(1, &cubeVAO);
+	glGenBuffers(1, &cubeVBO);
+	glGenBuffers(1, &instanceVBO);
 
-	unsigned int VAO, VBO;
-	glGenVertexArrays(1, &VAO);
-	glGenBuffers(1, &VBO);
+	glBindVertexArray(cubeVAO);
 
-	glBindVertexArray(VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (void*)0);
+	// Layout 0: Standard Cube Vertices
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
+	// Layout 1: Manual Instance Data
+	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+	// Upload our 3 test cubes manually
+	glBufferData(GL_ARRAY_BUFFER, sizeof(manual_cubes), manual_cubes, GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribDivisor(1, 1); 
+
 	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-
-    /* Loop until the user closes the window */
+    // Rendering loop
     while (!glfwWindowShouldClose(window))
     {
-        glClear(GL_COLOR_BUFFER_BIT);
+			glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    	glEnable(GL_DEPTH_TEST);
 
-		glClearColor(0.914f, 0.722f, 0.141f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+    	glUseProgram(shaderProgram);
 
-		glUseProgram(shaderProgram);
-		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
+    	// Pass the Identity Matrices since we aren't using GLM
+    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, identityMatrix);
+    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, identityMatrix);
+		
+    	// Set voxel size and max intensity
+    	glUniform1f(glGetUniformLocation(shaderProgram, "voxel_size"), 1.0f);
+    	glUniform1f(glGetUniformLocation(shaderProgram, "max_intensity"), 100.0f);
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+    	// Draw
+    	glBindVertexArray(cubeVAO);
+    	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, test_cube_count);
+
+    	glfwSwapBuffers(window);
+    	glfwPollEvents();
     }
 
+
+
+
+	
     glfwTerminate();
     return 0;
 }
