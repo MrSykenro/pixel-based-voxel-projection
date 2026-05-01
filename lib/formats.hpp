@@ -1,3 +1,6 @@
+#pragma once
+#include <stddef.h>
+
 // 3x3 Matrix of floats stored as an array of 9 floats
 struct Matrix3x3f
 {

@@ -193,6 +193,8 @@ extern "C"{namespace VoxelP{
         int image_width, int image_height,
         int camera_count)
     {
+        if (difference_image == nullptr) return;
+
         dim3 block_size(16, 16, 1);
 
         dim3 grid_size(
