@@ -10,4 +10,5 @@ target_link_libraries(main PRIVATE
     OpenGL::GL
     glad
     glfw
+    glm
 )

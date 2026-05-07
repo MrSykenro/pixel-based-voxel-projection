@@ -1,12 +1,14 @@
 #include <iostream>
 #include <vector>
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include "test.hpp"
 #include "voxel_projection.hpp"
-
-#include <fstream>
-#include <sstream>
 
 float cube_vertices[] = {
     // Back face
@@ -120,13 +122,29 @@ int main() {
 	};
 	int test_cube_count = 3;
 
-	float identityMatrix[16] = {
-	    1,0,0,0,
-	    0,1,0,0,
-	    0,0,1,0,
-	    0,0,0,1
-	};
 
+
+	// Camera Settings
+	float distance = 5.0f; 
+	// 45 degrees in radians for all angles
+	float angle = glm::radians(45.0f); 
+	
+	// Calculate camera position using spherical coordinates
+	// This puts the camera at a 45-degree offset on all axes
+	float camX = distance * cos(angle) * sin(angle);
+	float camY = distance * sin(angle);
+	float camZ = distance * cos(angle) * cos(angle);
+	
+	glm::vec3 cameraPos   = glm::vec3(camX, camY, camZ);
+	glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+	glm::vec3 up           = glm::vec3(0.0f, 1.0f, 0.0f);
+	
+	// Create Matrices
+	glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
+	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 640.0f / 480.0f, 0.1f, 100.0f);
+
+
+	
 	// 1. Load the source code from files
 	std::string vertexCode = loadShaderSource("../shaders/cubes_instanced.vert");
 	std::string fragmentCode = loadShaderSource("../shaders/cubes_instanced.frag");
@@ -134,14 +152,14 @@ int main() {
 	const char* vShaderSource = vertexCode.c_str();
 	const char* fShaderSource = fragmentCode.c_str();
 
+	int success;
+	char infoLog[512];
+
 	// 2. Compile Vertex Shader
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vShaderSource, NULL);
 	glCompileShader(vertexShader);
-
-	// Check for compile errors
-	int success;
-	char infoLog[512];
+	
 	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
 	if (!success) {
 	    glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
@@ -152,7 +170,7 @@ int main() {
 	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fShaderSource, NULL);
 	glCompileShader(fragmentShader);
-
+	
 	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
 	if (!success) {
 	    glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
@@ -202,18 +220,18 @@ int main() {
     // Rendering loop
     while (!glfwWindowShouldClose(window))
     {
-			glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     	glEnable(GL_DEPTH_TEST);
 
     	glUseProgram(shaderProgram);
 
     	// Pass the Identity Matrices since we aren't using GLM
-    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, identityMatrix);
-    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, identityMatrix);
+    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 		
     	// Set voxel size and max intensity
-    	glUniform1f(glGetUniformLocation(shaderProgram, "voxel_size"), 1.0f);
+    	glUniform1f(glGetUniformLocation(shaderProgram, "voxel_size"), 0.2f);
     	glUniform1f(glGetUniformLocation(shaderProgram, "max_intensity"), 100.0f);
 
     	// Draw
