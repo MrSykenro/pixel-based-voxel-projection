@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <fstream>
+#include <sstream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -9,6 +11,13 @@
 
 #include "test.hpp"
 #include "voxel_projection.hpp"
+
+int test_cube_count = 3;
+float manual_cubes[] = {
+	0.0f,  0.0f, -0.5f, 1.0f,
+	1.0f,  1.0f, -0.7f,  0.5f,
+	-1.0f, -0.5f, -0.4f,  0.3f
+};
 
 float cube_vertices[] = {
     // Back face
@@ -31,22 +40,23 @@ float cube_vertices[] = {
      0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f,
 };
 
-unsigned int cubeVAO, cubeVBO, instanceVBO;
+// Initialize viewer camera settings
+float distance = 5.0f; 
+float pitch = 0.0f;
+float yaw = 0.0f;
 
-std::string loadShaderSource(const char* filePath) {
-    std::ifstream file(filePath);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open shader file: " << filePath << std::endl;
-        return "";
-    }
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+// Fetch contents of the specified shader source file
+std::string loadShaderSource(const char* filePath){
+	std::ifstream file(filePath);
+	if(!file.is_open()){
+		std::cerr << "Failed to open shader file: " << filePath << std::endl;
+		return "";
+	}
+
+	std::stringstream buffer;
+	buffer << file.rdbuf();
+	return buffer.str();
 }
-
-
-
-
 
 int main() {
     // -------------------------------------------------------------------------
@@ -111,141 +121,122 @@ int main() {
     return -1;
     }
 
-
-
-
-
-	float manual_cubes[] = {
-    	0.0f,  0.0f, -0.5f, 100.0f, // Cube 1: Center, slightly away
-    	1.0f,  1.0f, -0.7f,  50.0f, // Cube 2: Top Right, further away
-   		-1.0f, -0.5f, -0.4f,  10.0f  // Cube 3: Bottom Left, very close
-	};
-	int test_cube_count = 3;
-
-
-
-	// Camera Settings
-	float distance = 5.0f; 
-	// 45 degrees in radians for all angles
-	float angle = glm::radians(45.0f); 
-	
-	// Calculate camera position using spherical coordinates
-	// This puts the camera at a 45-degree offset on all axes
-	float camX = distance * cos(angle) * sin(angle);
-	float camY = distance * sin(angle);
-	float camZ = distance * cos(angle) * cos(angle);
-	
-	glm::vec3 cameraPos   = glm::vec3(camX, camY, camZ);
-	glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
-	glm::vec3 up           = glm::vec3(0.0f, 1.0f, 0.0f);
-	
-	// Create Matrices
-	glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
-	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 640.0f / 480.0f, 0.1f, 100.0f);
-
-
-	
-	// 1. Load the source code from files
-	std::string vertexCode = loadShaderSource("../shaders/cubes_instanced.vert");
-	std::string fragmentCode = loadShaderSource("../shaders/cubes_instanced.frag");
-
-	const char* vShaderSource = vertexCode.c_str();
-	const char* fShaderSource = fragmentCode.c_str();
+	// Load shader code
+	std::string vertex_code = loadShaderSource("../shaders/cubes_instanced.vert");
+	std::string fragment_code = loadShaderSource("../shaders/cubes_instanced.frag");
+	const char* v_shader_source = vertex_code.c_str();
+	const char* f_shader_source = fragment_code.c_str();
 
 	int success;
-	char infoLog[512];
+	char info_log[512];
 
-	// 2. Compile Vertex Shader
-	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vShaderSource, NULL);
-	glCompileShader(vertexShader);
-	
-	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-	    glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-	    std::cout << "Vertex Compilation Failed:\n" << infoLog << std::endl;
+	// Compile vertex shader
+	unsigned int vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vertex_shader, 1, &v_shader_source, NULL);
+	glCompileShader(vertex_shader);
+
+	glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
+	if(!success){
+		glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
+		std::cout << "Vertex compilation failed:\n" << info_log << std::endl;
 	}
 
-	// 3. Compile Fragment Shader
-	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fShaderSource, NULL);
-	glCompileShader(fragmentShader);
-	
-	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-	if (!success) {
-	    glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-	    std::cout << "Fragment Compilation Failed:\n" << infoLog << std::endl;
+	// Compile fragment shader
+	unsigned int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fragment_shader, 1, &f_shader_source, NULL);
+	glCompileShader(fragment_shader);
+
+	glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
+	if(!success){
+		glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
+		std::cout << "Fragment compilation failed:\n" << info_log << std::endl;
 	}
 
-	// 4. Link Program
-	unsigned int shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
+	// Link the program
+	unsigned int shader_program = glCreateProgram();
+	glAttachShader(shader_program, vertex_shader);
+	glAttachShader(shader_program, fragment_shader);
+	glLinkProgram(shader_program);
 
-	// Check for linking errors
-	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-	if (!success) {
-	    glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-	    std::cout << "Shader Linking Failed:\n" << infoLog << std::endl;
+	glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
+	if(!success){
+		glGetProgramInfoLog(shader_program, 512, NULL, info_log);
+		std::cout << "Shader linking failed:\n" << info_log << std::endl;
 	}
 
-	// 5. Cleanup
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
+	// Cleanup
+	glDeleteShader(vertex_shader);
+	glDeleteShader(fragment_shader);
 
-	unsigned int cubeVAO, cubeVBO, instanceVBO;
-	glGenVertexArrays(1, &cubeVAO);
-	glGenBuffers(1, &cubeVBO);
-	glGenBuffers(1, &instanceVBO);
+	// Create VAO and VBO's
+	unsigned int object_VAO, object_VBO, instance_VBO;
+	glGenVertexArrays(1, &object_VAO);
+	glGenBuffers(1, &object_VBO);
+	glGenBuffers(1, &instance_VBO);
 
-	glBindVertexArray(cubeVAO);
+	glBindVertexArray(object_VAO); // Bind VAO
 
-	// Layout 0: Standard Cube Vertices
-	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	// Load object data. Layout 0
+	glBindBuffer(GL_ARRAY_BUFFER, object_VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_STATIC_DRAW);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	// Layout 1: Manual Instance Data
-	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	// Upload our 3 test cubes manually
+	// Load instance data. Layout 1
+	glBindBuffer(GL_ARRAY_BUFFER, instance_VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(manual_cubes), manual_cubes, GL_STATIC_DRAW);
 	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(1);
-	glVertexAttribDivisor(1, 1); 
 
-	glBindVertexArray(0);
+	glVertexAttribDivisor(1, 1); 
+	glBindVertexArray(0); // Unbind VAO
+
+	float camera_speed = 0.005f;
 
     // Rendering loop
     while (!glfwWindowShouldClose(window))
     {
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     	glEnable(GL_DEPTH_TEST);
-
-    	glUseProgram(shaderProgram);
-
-    	// Pass the Identity Matrices since we aren't using GLM
-    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-    	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 		
-    	// Set voxel size and max intensity
-    	glUniform1f(glGetUniformLocation(shaderProgram, "voxel_size"), 0.2f);
-    	glUniform1f(glGetUniformLocation(shaderProgram, "max_intensity"), 100.0f);
+		// Check for input and update viewer camera settings
+		if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) distance += camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) distance -= camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) yaw += camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) yaw -= camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) pitch += camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) pitch -= camera_speed;
 
-    	// Draw
-    	glBindVertexArray(cubeVAO);
-    	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, test_cube_count);
+		// Clamp pitch value
+		if(pitch > 1.5f) pitch = 1.5f;
+		if(pitch < -1.5f) pitch = -1.5f;
+
+		// Calculate camera position
+		float camera_x = distance * cos(pitch) * sin(yaw);
+		float camera_y = distance * sin(pitch);
+		float camera_z = distance * cos(pitch) * cos(yaw);
+
+		// Calculate matrices
+		glm::vec3 camera_position = glm::vec3(camera_x, camera_y, camera_z);
+		glm::vec3 camera_target = glm::vec3(0.0f, 0.0f, 0.0f);
+		glm::vec3 up_vector = glm::vec3(0.0f, 1.0f, 0.0f);
+		glm::mat4 view_matrix = glm::lookAt(camera_position, camera_target, up_vector);
+		glm::mat4 projection_matrix = glm::perspective(glm::radians(60.0f), 640.0f/480.0f, 0.1f, 100.0f);
+
+		// Call the shader with the given settings
+		glUseProgram(shader_program);
+		glUniformMatrix4fv(glGetUniformLocation(shader_program, "view_matrix"), 1, GL_FALSE, glm::value_ptr(view_matrix));
+		glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection_matrix"), 1, GL_FALSE, glm::value_ptr(projection_matrix));
+		glUniform1f(glGetUniformLocation(shader_program, "voxel_size"), 0.2f);
+
+		glBindVertexArray(object_VAO); // Bind VAO
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 36, test_cube_count);
 
     	glfwSwapBuffers(window);
     	glfwPollEvents();
     }
 
-
-
-
-	
     glfwTerminate();
     return 0;
 }
