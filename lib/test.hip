@@ -27,11 +27,26 @@ void run_vector_add(const std::vector<float>& h_A, const std::vector<float>& h_B
     HIP_CHECK(hipMemcpy(d_B, h_B.data(), size, hipMemcpyHostToDevice));
 
     int threadsPerBlock = 256;
-    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+    int blocksPerGrid = (N + threadsPerBlock - 1) /  threadsPerBlock;
 
     hipLaunchKernelGGL(vectorAddKernel, dim3(blocksPerGrid), dim3(threadsPerBlock), 0, 0, d_A, d_B, d_C, N);
 
     HIP_CHECK(hipMemcpy(h_C.data(), d_C, size, hipMemcpyDeviceToHost));
 
     hipFree(d_A); hipFree(d_B); hipFree(d_C);
+}
+float* create_device_array(const float *h_array, int N){
+    float *d_array;
+    HIP_CHECK(hipMalloc(&d_array, N * sizeof(float)));
+
+    HIP_CHECK(hipMemcpy(d_array, h_array, N * sizeof(float), hipMemcpyHostToDevice));
+
+    return d_array;
+}
+
+void delete_device_array(float *d_array){
+    if(d_array != nullptr){
+        HIP_CHECK(hipFree(&d_array));
+        d_array = nullptr;
+    }
 }

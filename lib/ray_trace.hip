@@ -3,6 +3,8 @@
 #include <thrust/device_ptr.h>
 #include <thrust/scan.h>
 #include <thrust/reduce.h>
+
+#include <float.h>
 #include <cmath>
 
 #define EPSILON 1e-12f
@@ -129,9 +131,9 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
 
     // Calculate the begining world coordinates of the indexed voxel.
     float3 entrance_plane = make_float3(
-        static_cast<float>(chunk_index.x + max(0, step_direction.x)) * chunk_length + grid_min.x,
-        static_cast<float>(chunk_index.y + max(0, step_direction.y)) * chunk_length + grid_min.y,
-        static_cast<float>(chunk_index.z + max(0, step_direction.z)) * chunk_length + grid_min.z
+        static_cast<float>(chunk_index.x + fmaxf(0, step_direction.x)) * chunk_length + grid_min.x,
+        static_cast<float>(chunk_index.y + fmaxf(0, step_direction.y)) * chunk_length + grid_min.y,
+        static_cast<float>(chunk_index.z + fmaxf(0, step_direction.z)) * chunk_length + grid_min.z
     );
 
     // Length of the ray; from origin to nearest voxel boundary plane.  
@@ -251,9 +253,9 @@ __global__ void traceRays(RayBuffer ray_buffer, VoxelGrid voxel_grid){
 
     // Calculate the begining world coordinates of the indexed voxel.
     float3 entrance_plane = make_float3(
-        static_cast<float>(voxel_index.x + max(0, step_direction.x)) * voxel_grid.voxel_length + grid_min.x,
-        static_cast<float>(voxel_index.y + max(0, step_direction.y)) * voxel_grid.voxel_length + grid_min.y,
-        static_cast<float>(voxel_index.z + max(0, step_direction.z)) * voxel_grid.voxel_length + grid_min.z
+        static_cast<float>(voxel_index.x + fmaxf(0, step_direction.x)) * voxel_grid.voxel_length + grid_min.x,
+        static_cast<float>(voxel_index.y + fmaxf(0, step_direction.y)) * voxel_grid.voxel_length + grid_min.y,
+        static_cast<float>(voxel_index.z + fmaxf(0, step_direction.z)) * voxel_grid.voxel_length + grid_min.z
     );
 
     // Length of the ray; from origin to nearest voxel boundary plane.  

@@ -169,12 +169,12 @@ int main() {
 	glDeleteShader(fragment_shader);
 
 	// Create VAO and VBO's
-	unsigned int object_VAO, object_VBO, instance_VBO;
-	glGenVertexArrays(1, &object_VAO);
+	unsigned int voxels_VAO, object_VBO, instance_VBO;
+	glGenVertexArrays(1, &voxels_VAO);
 	glGenBuffers(1, &object_VBO);
 	glGenBuffers(1, &instance_VBO);
 
-	glBindVertexArray(object_VAO); // Bind VAO
+	glBindVertexArray(voxels_VAO); // Bind VAO
 
 	// Load object data. Layout 0
 	glBindBuffer(GL_ARRAY_BUFFER, object_VBO);
@@ -191,7 +191,7 @@ int main() {
 	glVertexAttribDivisor(1, 1); 
 	glBindVertexArray(0); // Unbind VAO
 
-	float camera_speed = 0.005f;
+	float camera_speed = 0.02f;
 
     // Rendering loop
     while (!glfwWindowShouldClose(window))
@@ -230,7 +230,7 @@ int main() {
 		glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection_matrix"), 1, GL_FALSE, glm::value_ptr(projection_matrix));
 		glUniform1f(glGetUniformLocation(shader_program, "voxel_size"), 0.2f);
 
-		glBindVertexArray(object_VAO); // Bind VAO
+		glBindVertexArray(voxels_VAO); // Bind VAO
 		glDrawArraysInstanced(GL_TRIANGLES, 0, 36, test_cube_count);
 
     	glfwSwapBuffers(window);
