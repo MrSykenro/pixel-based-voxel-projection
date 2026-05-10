@@ -8,7 +8,8 @@
 #include <cmath>
 
 #define EPSILON 1e-12f
-extern __constant__ float3 c_camera_positions[32];
+
+__constant__ float3 c_camera_positions[32];
 
 /**
  * Calculates the length of the ray when it enters and its the grid,
@@ -26,7 +27,6 @@ __device__ __forceinline__ bool calculateIntersectionPoints(
     float& ray_min, float& ray_max)
 {
     // Check if the parallel ray intersects the grid. Return false if not.
-    
     ray_min = 0.f; 
     ray_max = FLT_MAX;
     float ray_A, ray_B;
@@ -66,7 +66,7 @@ __device__ __forceinline__ bool calculateIntersectionPoints(
  * @param ray_buffer All of the rays that will be checked
  * @param voxel_grid The grid that will be checked
  */
-__global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
+__global__ void findActiveChunksKernel(RayBuffer ray_buffer, VoxelGrid voxel_grid){
     int ray_index = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(ray_index >= *(ray_buffer.ray_count)) return;
@@ -131,9 +131,9 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
 
     // Calculate the begining world coordinates of the indexed voxel.
     float3 entrance_plane = make_float3(
-        static_cast<float>(chunk_index.x + fmaxf(0, step_direction.x)) * chunk_length + grid_min.x,
-        static_cast<float>(chunk_index.y + fmaxf(0, step_direction.y)) * chunk_length + grid_min.y,
-        static_cast<float>(chunk_index.z + fmaxf(0, step_direction.z)) * chunk_length + grid_min.z
+        static_cast<float>(chunk_index.x + max(0, step_direction.x)) * chunk_length + grid_min.x,
+        static_cast<float>(chunk_index.y + max(0, step_direction.y)) * chunk_length + grid_min.y,
+        static_cast<float>(chunk_index.z + max(0, step_direction.z)) * chunk_length + grid_min.z
     );
 
     // Length of the ray; from origin to nearest voxel boundary plane.  
@@ -183,7 +183,7 @@ __global__ void findActiveChunks(RayBuffer ray_buffer, VoxelGrid voxel_grid){
     }
 }
 
-__global__ void traceRays(RayBuffer ray_buffer, VoxelGrid voxel_grid){
+__global__ void traceRaysKernel(RayBuffer ray_buffer, VoxelGrid voxel_grid){
     int ray_index = blockIdx.x * blockDim.x + threadIdx.x;
     
     if(ray_index >= *(ray_buffer.ray_count)) return;
@@ -253,9 +253,9 @@ __global__ void traceRays(RayBuffer ray_buffer, VoxelGrid voxel_grid){
 
     // Calculate the begining world coordinates of the indexed voxel.
     float3 entrance_plane = make_float3(
-        static_cast<float>(voxel_index.x + fmaxf(0, step_direction.x)) * voxel_grid.voxel_length + grid_min.x,
-        static_cast<float>(voxel_index.y + fmaxf(0, step_direction.y)) * voxel_grid.voxel_length + grid_min.y,
-        static_cast<float>(voxel_index.z + fmaxf(0, step_direction.z)) * voxel_grid.voxel_length + grid_min.z
+        static_cast<float>(voxel_index.x + max(0, step_direction.x)) * voxel_grid.voxel_length + grid_min.x,
+        static_cast<float>(voxel_index.y + max(0, step_direction.y)) * voxel_grid.voxel_length + grid_min.y,
+        static_cast<float>(voxel_index.z + max(0, step_direction.z)) * voxel_grid.voxel_length + grid_min.z
     );
 
     // Length of the ray; from origin to nearest voxel boundary plane.  
@@ -341,51 +341,67 @@ extern "C"{namespace VoxelP{
 
         int* active_chunks;
         int* chunk_mask;
-        float* voxel_array;
+        float* voxel_array = nullptr;
+        float* chunk_array = nullptr;
         
         HIP_CHECK(hipMalloc(&active_chunks, chunk_count * sizeof(int)));
         HIP_CHECK(hipMalloc(&chunk_mask, chunk_count * sizeof(int)));
-        HIP_CHECK(hipMalloc(&voxel_array, sizeof(int)));
+        HIP_CHECK(hipMalloc(&voxel_array, sizeof(float)));
 
         HIP_CHECK(hipMemset(active_chunks, 0, chunk_count * sizeof(int)));
         HIP_CHECK(hipMemset(chunk_mask, 0, chunk_count * sizeof(int)));
-        HIP_CHECK(hipMemset(voxel_array, 0, sizeof(int)));
+        HIP_CHECK(hipMemset(voxel_array, 0, sizeof(float)));
 
         return VoxelGrid{
             voxel_length, chunk_size, chunk_size_ln2, 
             grid_position_x, grid_position_y, grid_position_z, 
             chunk_grid_x, chunk_grid_y, chunk_grid_z,
-            active_chunks, chunk_mask, voxel_array
+            active_chunks, chunk_mask, voxel_array, chunk_array
         };
     }
 
+    void freeVoxelGrid(VoxelGrid &voxel_grid){
+        HIP_CHECK(hipFree(voxel_grid.active_chunks));
+        HIP_CHECK(hipFree(voxel_grid.chunk_mask));
+        HIP_CHECK(hipFree(voxel_grid.voxel_array));
+
+        voxel_grid.active_chunks = nullptr;
+        voxel_grid.chunk_mask = nullptr;
+        voxel_grid.voxel_array = nullptr;
+    }
+
     void projectToGrid(RayBuffer ray_buffer, VoxelGrid &voxel_grid){
-        int thread_count = 256;
-        int block_count = (*ray_buffer.ray_count + thread_count - 1) / thread_count;
+        // Get the number of rays to be run
+        int h_ray_count;
+        HIP_CHECK(hipMemcpy(&h_ray_count, ray_buffer.ray_count, sizeof(int), hipMemcpyDeviceToHost));
+
+        dim3 block_size = dim3(256);
+        dim3 grid_size = dim3((h_ray_count + block_size.x - 1) / block_size.x);
 
         size_t total_chunks = voxel_grid.chunk_grid_x * voxel_grid.chunk_grid_y * voxel_grid.chunk_grid_z;
 
         // Clear active_chunks array
         HIP_CHECK(hipMemset(voxel_grid.active_chunks, 0, total_chunks * sizeof(int)));
 
-        hipLaunchKernelGGL(findActiveChunks, dim3(block_count), dim3(thread_count), 0, 0, ray_buffer, voxel_grid);
+        hipLaunchKernelGGL(findActiveChunksKernel, grid_size, block_size, 0, 0, ray_buffer, voxel_grid);
         hipDeviceSynchronize();
 
         // Convert active chunks array into a chunk mask
-        thrust::device_ptr<int> d_active_chunks(voxel_grid.chunk_mask);
+        thrust::device_ptr<int> d_active_chunks(voxel_grid.active_chunks);
         thrust::device_ptr<int> d_chunk_mask(voxel_grid.chunk_mask);
-        thrust::exclusive_scan(d_active_chunks, d_active_chunks + total_chunks, d_chunk_mask);
+        thrust::exclusive_scan(d_active_chunks, d_chunk_mask + total_chunks, d_chunk_mask);
 
-        int active_chunk_count = thrust::reduce(d_active_chunks, d_active_chunks + total_chunks, 0, thrust::plus<int>());
+        int active_chunk_count = thrust::reduce(d_active_chunks, d_chunk_mask + total_chunks, 0, thrust::plus<int>());
+        std::cout << "chunk count " << active_chunk_count << std::endl;
         if (active_chunk_count == 0) return;
 
         size_t total_voxels = (size_t)active_chunk_count * (size_t)1 << (voxel_grid.chunk_size_ln2 * 3);
 
         // Create new voxel_array
         HIP_CHECK(hipMalloc(&voxel_grid.voxel_array, total_voxels * sizeof(float)));
-        HIP_CHECK(hipMemset(voxel_grid.voxel_array, 0, total_voxels * sizeof(float)));
+        HIP_CHECK(hipMemset(voxel_grid.voxel_array, 1, total_voxels * sizeof(float)));
 
-        hipLaunchKernelGGL(traceRays, dim3(block_count), dim3(thread_count), 0, 0, ray_buffer, voxel_grid);
+        hipLaunchKernelGGL(traceRaysKernel, grid_size, block_size, 0, 0, ray_buffer, voxel_grid);
         hipDeviceSynchronize();
     }
 }}

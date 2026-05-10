@@ -1,7 +1,5 @@
 #include <iostream>
 #include <vector>
-#include <fstream>
-#include <sstream>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -11,12 +9,14 @@
 
 #include "test.hpp"
 #include "voxel_projection.hpp"
+#include "rendering.hpp"
 
-int test_cube_count = 3;
+int test_cube_count = 4;
 float manual_cubes[] = {
-	0.0f,  0.0f, -0.5f, 1.0f,
+	0.0f,  0.0f, -0.5f, 0.9f,
 	1.0f,  1.0f, -0.7f,  0.5f,
-	-1.0f, -0.5f, -0.4f,  0.3f
+	-1.0f, -0.5f, -0.4f,  0.3f,
+	0.0f, 0.0f, 0.0f, 1.0f
 };
 
 float cube_vertices[] = {
@@ -45,19 +45,6 @@ float distance = 5.0f;
 float pitch = 0.0f;
 float yaw = 0.0f;
 
-// Fetch contents of the specified shader source file
-std::string loadShaderSource(const char* filePath){
-	std::ifstream file(filePath);
-	if(!file.is_open()){
-		std::cerr << "Failed to open shader file: " << filePath << std::endl;
-		return "";
-	}
-
-	std::stringstream buffer;
-	buffer << file.rdbuf();
-	return buffer.str();
-}
-
 int main() {
     // -------------------------------------------------------------------------
     // For Testing - Unrelated
@@ -77,21 +64,26 @@ int main() {
 
     // Fake Data
     // Needs a way to take frames
-    CameraData camera_data[1] = {{1, 60.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f}};
-    int image_width = 1920;
-    int image_height = 1080;
+    CameraData camera_data[1] = {{1, 60.f, 0.f, 0.f, 0.f, 0.f, 0.f, -6.f}};
+    int image_width = 5;
+    int image_height = 5;
     int camera_count = 1;
     float threshold = 0.1;
     
-    float* difference_image = nullptr; // Placeholder
+    float difference_image[25] = {1.0f, 0.5f, 0.3f, 0.7f, 1.0f, 0.5f, 0.3f, 0.7f, 1.0f, 0.5f, 0.3f, 0.7f, 1.0f, 0.5f, 0.3f, 0.7f, 0.3f, 0.7f, 1.0f, 0.3f, 0.7f}; // Placeholder
 
     int pixel_count = image_height * image_width * camera_count;
 
+	// Voxel Projection
     VoxelP::setCameraConstants(camera_data, 1);
 
     RayBuffer ray_buffer = VoxelP::initRayBuffer(pixel_count);
 
+	VoxelGrid voxel_grid = VoxelP::initVoxelGrid(1, 16, -8.0f, -8.0f, 0.0f, 1, 1, 1);
+
     VoxelP::generateRays(difference_image, ray_buffer, threshold, image_width, image_height, camera_count);
+
+	VoxelP::projectToGrid(ray_buffer, voxel_grid);
 
     VoxelP::freeRayBuffer(ray_buffer);
 
@@ -99,6 +91,8 @@ int main() {
     // GUI
     // -------------------------------------------------------------------------
     
+	size_t instance_vbo_size = sizeof(float) * 4096;
+
     // Initialize GLFW
     if (!glfwInit()) return -1;
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -121,52 +115,7 @@ int main() {
     return -1;
     }
 
-	// Load shader code
-	std::string vertex_code = loadShaderSource("../shaders/cubes_instanced.vert");
-	std::string fragment_code = loadShaderSource("../shaders/cubes_instanced.frag");
-	const char* v_shader_source = vertex_code.c_str();
-	const char* f_shader_source = fragment_code.c_str();
-
-	int success;
-	char info_log[512];
-
-	// Compile vertex shader
-	unsigned int vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertex_shader, 1, &v_shader_source, NULL);
-	glCompileShader(vertex_shader);
-
-	glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-	if(!success){
-		glGetShaderInfoLog(vertex_shader, 512, NULL, info_log);
-		std::cout << "Vertex compilation failed:\n" << info_log << std::endl;
-	}
-
-	// Compile fragment shader
-	unsigned int fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragment_shader, 1, &f_shader_source, NULL);
-	glCompileShader(fragment_shader);
-
-	glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-	if(!success){
-		glGetShaderInfoLog(fragment_shader, 512, NULL, info_log);
-		std::cout << "Fragment compilation failed:\n" << info_log << std::endl;
-	}
-
-	// Link the program
-	unsigned int shader_program = glCreateProgram();
-	glAttachShader(shader_program, vertex_shader);
-	glAttachShader(shader_program, fragment_shader);
-	glLinkProgram(shader_program);
-
-	glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-	if(!success){
-		glGetProgramInfoLog(shader_program, 512, NULL, info_log);
-		std::cout << "Shader linking failed:\n" << info_log << std::endl;
-	}
-
-	// Cleanup
-	glDeleteShader(vertex_shader);
-	glDeleteShader(fragment_shader);
+	unsigned int shader_program = compileShader("../shaders/cubes_instanced.vert", "../shaders/cubes_instanced.frag");
 
 	// Create VAO and VBO's
 	unsigned int voxels_VAO, object_VBO, instance_VBO;
@@ -184,12 +133,41 @@ int main() {
 
 	// Load instance data. Layout 1
 	glBindBuffer(GL_ARRAY_BUFFER, instance_VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(manual_cubes), manual_cubes, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, instance_vbo_size, NULL, GL_STATIC_DRAW);
 	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(1);
 
 	glVertexAttribDivisor(1, 1); 
 	glBindVertexArray(0); // Unbind VAO
+
+	// HIP + OpenGL interop
+	unsigned int hip_device_count = 0;
+	int hip_devices; 
+	HIP_CHECK(hipGLGetDevices(&hip_device_count, &hip_devices, 1, hipGLDeviceListAll));
+	HIP_CHECK(hipSetDevice(hip_devices));
+
+	hipGraphicsResource* hip_instance_vbo;
+	HIP_CHECK(hipGraphicsGLRegisterBuffer(&hip_instance_vbo, instance_VBO, hipGraphicsRegisterFlagsWriteDiscard));
+
+	HIP_CHECK(hipGraphicsMapResources(1, &hip_instance_vbo, 0));
+	
+	float* dptr;
+	size_t size;
+
+	HIP_CHECK(hipGraphicsResourceGetMappedPointer((void**)&dptr, &size, hip_instance_vbo));
+	
+	copy_to_device_array(manual_cubes, dptr, 4*test_cube_count);
+
+	VoxelP::convertToVBO(voxel_grid, dptr);
+
+	size_t copy_size = 1;
+	float d_debug_array[1];
+
+	HIP_CHECK(hipMemcpy(d_debug_array, voxel_grid.voxel_array, copy_size*sizeof(float), hipMemcpyDeviceToHost));
+	for(int i = 0; i<copy_size; i++) std::cout << d_debug_array[i] << " ";
+	std::cout << std::endl;
+
+	HIP_CHECK(hipGraphicsUnmapResources(1, &hip_instance_vbo, 0));
 
 	float camera_speed = 0.02f;
 
@@ -199,14 +177,17 @@ int main() {
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     	glEnable(GL_DEPTH_TEST);
-		
+
+		// Quit with input
+		if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) break;
+
 		// Check for input and update viewer camera settings
-		if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) distance += camera_speed;
-		if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) distance -= camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) pitch += camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) pitch -= camera_speed;
 		if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) yaw += camera_speed;
 		if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) yaw -= camera_speed;
-		if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) pitch += camera_speed;
-		if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) pitch -= camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) distance += camera_speed;
+		if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) distance -= camera_speed;
 
 		// Clamp pitch value
 		if(pitch > 1.5f) pitch = 1.5f;

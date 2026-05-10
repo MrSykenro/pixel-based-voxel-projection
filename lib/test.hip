@@ -2,14 +2,6 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
 
-#define HIP_CHECK(command) { \
-    hipError_t status = command; \
-    if (status != hipSuccess) { \
-        std::cerr << "Error: " << hipGetErrorString(status) << std::endl; \
-        exit(1); \
-    } \
-}
-
 __global__ void vectorAddKernel(const float* A, const float* B, float* C, int N) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < N) C[i] = A[i] + B[i];
@@ -35,13 +27,8 @@ void run_vector_add(const std::vector<float>& h_A, const std::vector<float>& h_B
 
     hipFree(d_A); hipFree(d_B); hipFree(d_C);
 }
-float* create_device_array(const float *h_array, int N){
-    float *d_array;
-    HIP_CHECK(hipMalloc(&d_array, N * sizeof(float)));
-
-    HIP_CHECK(hipMemcpy(d_array, h_array, N * sizeof(float), hipMemcpyHostToDevice));
-
-    return d_array;
+void copy_to_device_array(const float *h_array, float *d_array, int N){
+    HIP_CHECK(hipMemcpy(d_array, h_array, sizeof(float)*N, hipMemcpyHostToDevice));
 }
 
 void delete_device_array(float *d_array){

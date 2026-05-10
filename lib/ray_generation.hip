@@ -86,7 +86,7 @@ __global__ void calculateRayKernel(
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     int camera_id = blockIdx.z;
-    
+
     if(x >= image_width || y >= image_height) return;
 
     // Get the index of the current pixel.

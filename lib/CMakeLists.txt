@@ -5,6 +5,8 @@ add_library(test_lib STATIC test.hip)
 add_library(voxel_projection STATIC 
     ray_generation.hip
     motion_extraction.hip
+    ray_trace.hip
+    grid_tools.hip
 )
 
 set_target_properties(voxel_projection PROPERTIES HIP_SEPARABLE_COMPILATION ON)

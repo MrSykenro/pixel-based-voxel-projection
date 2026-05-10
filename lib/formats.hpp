@@ -46,4 +46,6 @@ struct VoxelGrid
     int* active_chunks;
     int* chunk_mask;
     float* voxel_array;
+
+    float* chunk_array; // Filler
 };

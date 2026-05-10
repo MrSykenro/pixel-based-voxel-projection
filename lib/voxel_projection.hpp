@@ -5,15 +5,19 @@
 #include <iostream>
 #include <math.h>
 #include <hip/hip_runtime.h>
+#include <hip/hip_gl_interop.h>
 
 #define HIP_CHECK(command) { \
     hipError_t status = command; \
     if (status != hipSuccess) { \
-        std::cerr << "Error: " << hipGetErrorString(status) << std::endl; \
+        std::cerr << "HIP Error: " << hipGetErrorString(status) << std::endl; \
         exit(1); \
     } \
 }
 
+extern __constant__ Matrix3x3f c_camera_matrices[32];
+extern __constant__ float3 c_camera_positions[32];
+extern __constant__ float c_focal_lengths[32];
 
 extern "C"{namespace VoxelP{ 
     /**
@@ -74,4 +78,18 @@ extern "C"{namespace VoxelP{
     // Requires Documentation
     //--------------------------------------------------------------------------
     void projectToGrid(RayBuffer ray_buffer, VoxelGrid &voxel_grid);
+
+    VoxelGrid initVoxelGrid(
+        int voxel_length, int chunk_size,
+        float grid_position_x, float grid_position_y, float grid_position_z,
+        int chunk_grid_x, int chunk_grid_y, int chunk_grid_z  
+    );
+
+    void freeVoxelGrid(VoxelGrid &voxel_grid);
+
+    /**
+     * Converts voxel_grid into coordinate format to be used for Rendering
+     */
+    void convertToVBO(VoxelGrid &voxel_grid, float* opengl_VBO);
+
 }}
